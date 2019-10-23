@@ -469,12 +469,12 @@ module.exports = async (
       runtimeChunk: {
         name: `webpack-runtime`,
       },
+      // use hashes instead of ids for module identifiers
+      // @see https://webpack.js.org/guides/caching/#module-identifiers
+      moduleIds: `hashed`,
       splitChunks: {
         name: false,
         chunks: `all`,
-        // use hashes instead of ids for module identifiers
-        // @see https://webpack.js.org/guides/caching/#module-identifiers
-        moduleIds: `hashed`,
         cacheGroups: {
           default: false,
           vendors: false,
