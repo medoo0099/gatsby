@@ -1,10 +1,16 @@
 import Bluebird from "bluebird"
 import fs from "fs-extra"
+import * as path from "path"
 import reporter from "gatsby-cli/lib/reporter"
 import { createErrorFromString } from "gatsby-cli/lib/reporter/errors"
 import telemetry from "gatsby-telemetry"
 import { chunk } from "lodash"
 import webpack from "webpack"
+import { createInternalJob, enqueueJob } from "../utils/jobs-manager"
+import {
+  name as htmlRenderPackageName,
+  version as htmlRenderPackageVersion,
+} from "../internal-plugins/html-render/package.json"
 
 import webpackConfig from "../utils/webpack.config"
 import { structureWebpackErrors } from "../utils/webpack-error-utils"
@@ -76,20 +82,49 @@ const renderHTMLQueue = async (
     [`gatsby_log_level`, process.env.gatsby_log_level],
   ]
 
-  // const start = process.hrtime()
-  const segments = chunk(pages, 50)
+  const pagePromises = pages.map(page => {
+    const job = createInternalJob(
+      {
+        name: `RENDER_HTML`,
+        inputPaths: [htmlComponentRendererPath],
+        outputDir: path.join(process.cwd(), `public`),
+        args: {
+          page,
+          envVars,
+        },
+      },
+      {
+        name: htmlRenderPackageName,
+        version: htmlRenderPackageVersion,
+        resolve: path.dirname(
+          require.resolve(`../internal-plugins/html-render`)
+        ),
+      }
+    )
 
-  await Bluebird.map(segments, async pageSegment => {
-    await workerPool.renderHTML({
-      envVars,
-      htmlComponentRendererPath,
-      paths: pageSegment,
+    return enqueueJob(job).then(res => {
+      activity.tick()
+
+      return res
     })
-
-    if (activity && activity.tick) {
-      activity.tick(pageSegment.length)
-    }
   })
+
+  await Promise.all(pagePromises)
+
+  // const start = process.hrtime()
+  // const segments = chunk(pages, 50)
+
+  // await Bluebird.map(segments, async pageSegment => {
+  //   await workerPool.renderHTML({
+  //     envVars,
+  //     htmlComponentRendererPath,
+  //     paths: pageSegment,
+  //   })
+
+  //   if (activity && activity.tick) {
+  //     activity.tick(pageSegment.length)
+  //   }
+  // })
 }
 
 const doBuildPages = async (
