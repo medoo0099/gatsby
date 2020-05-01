@@ -14,11 +14,14 @@ import {
 
 import webpackConfig from "../utils/webpack.config"
 import { structureWebpackErrors } from "../utils/webpack-error-utils"
+import { actions } from "../redux/actions/public"
 
 import { IProgram, Stage } from "./types"
 
 type IActivity = any // TODO
 type IWorkerPool = any // TODO
+
+const { createJobV2 } = actions
 
 const runWebpack = (compilerConfig): Bluebird<webpack.Stats> =>
   new Bluebird((resolve, reject) => {
@@ -72,7 +75,8 @@ const renderHTMLQueue = async (
   workerPool: IWorkerPool,
   activity: IActivity,
   htmlComponentRendererPath: string,
-  pages: string[]
+  pages: string[],
+  store: any
 ): Promise<void> => {
   // We need to only pass env vars that are set programmatically in gatsby-cli
   // to child process. Other vars will be picked up from environment.
@@ -82,32 +86,56 @@ const renderHTMLQueue = async (
     [`gatsby_log_level`, process.env.gatsby_log_level],
   ]
 
-  const pagePromises = pages.map(page => {
-    const job = createInternalJob(
-      {
-        name: `RENDER_HTML`,
-        inputPaths: [htmlComponentRendererPath],
-        outputDir: path.join(process.cwd(), `public`),
-        args: {
-          page,
-          envVars,
+  const pagePromises = pages.map(
+    page =>
+      createJobV2(
+        {
+          name: `RENDER_HTML`,
+          inputPaths: [htmlComponentRendererPath],
+          outputDir: path.join(process.cwd(), `public`),
+          args: {
+            page,
+            envVars,
+          },
         },
-      },
-      {
-        name: htmlRenderPackageName,
-        version: htmlRenderPackageVersion,
-        resolve: path.dirname(
-          require.resolve(`../internal-plugins/html-render`)
-        ),
-      }
-    )
+        {
+          name: htmlRenderPackageName,
+          version: htmlRenderPackageVersion,
+          resolve: path.dirname(
+            require.resolve(`../internal-plugins/html-render`)
+          ),
+        }
+      )(store.dispatch, store.getState).then(res => {
+        activity.tick()
 
-    return enqueueJob(job).then(res => {
-      activity.tick()
+        return res
+      })
+    // store.dispatch()
+    // const job = createInternalJob(
+    //   {
+    //     name: `RENDER_HTML`,
+    //     inputPaths: [htmlComponentRendererPath],
+    //     outputDir: path.join(process.cwd(), `public`),
+    //     args: {
+    //       page,
+    //       envVars,
+    //     },
+    //   },
+    //   {
+    //     name: htmlRenderPackageName,
+    //     version: htmlRenderPackageVersion,
+    //     resolve: path.dirname(
+    //       require.resolve(`../internal-plugins/html-render`)
+    //     ),
+    //   }
+    // )
 
-      return res
-    })
-  })
+    // return enqueueJob(job).then(res => {
+    //   activity.tick()
+
+    //   return res
+    // })
+  )
 
   await Promise.all(pagePromises)
 
@@ -131,14 +159,15 @@ const doBuildPages = async (
   rendererPath: string,
   pagePaths: string[],
   activity: IActivity,
-  workerPool: IWorkerPool
+  workerPool: IWorkerPool,
+  store: any
 ): Promise<void> => {
   telemetry.addSiteMeasurement(`BUILD_END`, {
     pagesCount: pagePaths.length,
   })
 
   try {
-    await renderHTMLQueue(workerPool, activity, rendererPath, pagePaths)
+    await renderHTMLQueue(workerPool, activity, rendererPath, pagePaths, store)
   } catch (error) {
     const prettyError = await createErrorFromString(
       error.stack,
@@ -155,14 +184,16 @@ export const buildHTML = async ({
   pagePaths,
   activity,
   workerPool,
+  store,
 }: {
   program: IProgram
   stage: Stage
   pagePaths: string[]
   activity: IActivity
   workerPool: IWorkerPool
+  store: any
 }): Promise<void> => {
   const rendererPath = await buildRenderer(program, stage, activity.span)
-  await doBuildPages(rendererPath, pagePaths, activity, workerPool)
+  await doBuildPages(rendererPath, pagePaths, activity, workerPool, store)
   await deleteRenderer(rendererPath)
 }

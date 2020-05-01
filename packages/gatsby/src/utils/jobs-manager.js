@@ -232,6 +232,10 @@ exports.createInternalJob = (job, plugin) => {
       name: plugin.name,
       version: plugin.version,
       resolve: plugin.resolve,
+      worker:
+        plugin.name === `@gatsby/html-rendering`
+          ? `gatsby/dist/internal-plugins/html-render/gatsby-worker.js`
+          : `${plugin.name}/gatsby-worker.js`,
       isLocal: !plugin.resolve.includes(`/node_modules/`),
     },
   }

@@ -1250,6 +1250,10 @@ actions.createJobV2 = (job: JobV2, plugin: Plugin) => (dispatch, getState) => {
   const internalJob = createInternalJob(job, plugin)
   const jobContentDigest = internalJob.contentDigest
 
+  // if (job.name === `RENDER_HTML`) {
+  //   console.log(internalJob)
+  // }
+
   // Check if we already ran this job before, if yes we return the result
   // We have an inflight (in progress) queue inside the jobs manager to make sure
   // we don't waste resources twice during the process
