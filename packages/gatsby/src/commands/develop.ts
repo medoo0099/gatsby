@@ -26,7 +26,6 @@ import formatWebpackMessages from "react-dev-utils/formatWebpackMessages"
 import chalk from "chalk"
 import cors from "cors"
 import telemetry from "gatsby-telemetry"
-import * as WorkerPool from "../utils/worker/pool"
 import http from "http"
 import https from "https"
 
@@ -94,15 +93,14 @@ async function startServer(program: IDevelopArgs): Promise<IServer> {
   indexHTMLActivity.start()
   const directory = program.directory
   const directoryPath = withBasePath(directory)
-  const workerPool = WorkerPool.create()
   const createIndexHtml = async (activity: ActivityTracker): Promise<void> => {
     try {
       await buildHTML({
         program,
         stage: Stage.DevelopHTML,
         pagePaths: [`/`],
-        workerPool,
         activity,
+        store,
       })
     } catch (err) {
       if (err.name !== `WebpackError`) {

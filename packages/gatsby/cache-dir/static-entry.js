@@ -1,6 +1,6 @@
 const React = require(`react`)
 const fs = require(`fs`)
-const { join } = require(`path`)
+const nodePath = require(`path`)
 const { renderToString, renderToStaticMarkup } = require(`react-dom/server`)
 const { ServerLocation, Router, isRedirect } = require(`@reach/router`)
 const {
@@ -12,21 +12,14 @@ const {
   flattenDeep,
   replace,
   concat,
-  memoize,
 } = require(`lodash`)
 
 const { RouteAnnouncerProps } = require(`./route-announcer-props`)
 const apiRunner = require(`./api-runner-ssr`)
 const syncRequires = require(`./sync-requires`)
 const { version: gatsbyVersion } = require(`gatsby/package.json`)
-
-const stats = JSON.parse(
-  fs.readFileSync(`${process.cwd()}/public/webpack.stats.json`, `utf-8`)
-)
-
-const chunkMapping = JSON.parse(
-  fs.readFileSync(`${process.cwd()}/public/chunk-map.json`, `utf-8`)
-)
+const stats = require(`../public/webpack.stats.json`)
+const chunkMapping = require(`../public/chunk-map.json`)
 
 // const testRequireError = require("./test-require-error")
 // For some extremely mysterious reason, webpack adds the above module *after*
@@ -51,54 +44,19 @@ try {
 
 Html = Html && Html.__esModule ? Html.default : Html
 
-const getPageDataPath = path => {
-  const fixedPagePath = path === `/` ? `index` : path
-  return join(`page-data`, fixedPagePath, `page-data.json`)
-}
-
-const getPageDataUrl = pagePath => {
-  const pageDataPath = getPageDataPath(pagePath)
-  return `${__PATH_PREFIX__}/${pageDataPath}`
-}
-
-const getPageData = pagePath => {
-  const pageDataPath = getPageDataPath(pagePath)
-  const absolutePageDataPath = join(process.cwd(), `public`, pageDataPath)
-  const pageDataRaw = fs.readFileSync(absolutePageDataPath)
-
+const getPageData = pageDataPath => {
+  const absolutePageDataPath = nodePath.resolve(`public/${pageDataPath}`)
   try {
-    return JSON.parse(pageDataRaw.toString())
+    return JSON.parse(fs.readFileSync(absolutePageDataPath).toString())
   } catch (err) {
-    return null
+    return {}
   }
 }
-
-const appDataPath = join(`page-data`, `app-data.json`)
-
-const getAppDataUrl = memoize(() => {
-  let appData
-
-  try {
-    const absoluteAppDataPath = join(process.cwd(), `public`, appDataPath)
-    const appDataRaw = fs.readFileSync(absoluteAppDataPath)
-    appData = JSON.parse(appDataRaw.toString())
-
-    if (!appData) {
-      return null
-    }
-  } catch (err) {
-    return null
-  }
-
-  return `${__PATH_PREFIX__}/${appDataPath}`
-})
 
 const loadPageDataSync = pagePath => {
-  const pageDataPath = getPageDataPath(pagePath)
-  const pageDataFile = join(process.cwd(), `public`, pageDataPath)
+  const pageDataPath = page === `/` ? `index` : page
   try {
-    const pageDataJson = fs.readFileSync(pageDataFile)
-    return JSON.parse(pageDataJson)
+    return getPageData(path.join(`page-data`, pageDataPath, `page-data.json`))
   } catch (error) {
     // not an error if file is not found. There's just no page data
     return null
@@ -133,7 +91,7 @@ const ensureArray = components => {
   }
 }
 
-export default (pagePath, callback) => {
+export default ({ pagePath, pageDataPath, appDataPath }, callback) => {
   let bodyHtml = ``
   let headComponents = [
     <meta
@@ -196,11 +154,9 @@ export default (pagePath, callback) => {
     postBodyComponents = sanitizeComponents(components)
   }
 
-  const pageData = getPageData(pagePath)
-  const pageDataUrl = getPageDataUrl(pagePath)
-
-  const appDataUrl = getAppDataUrl()
-
+  const pageData = getPageData(pageDataPath)
+  const pageDataUrl = `${__PATH_PREFIX__}/${pageDataPath}`
+  const appDataUrl = `${__PATH_PREFIX__}/${appDataPath}`
   const { componentChunkName } = pageData
 
   class RouteHandler extends React.Component {
@@ -392,12 +348,10 @@ export default (pagePath, callback) => {
       } else {
         headComponents.unshift(
           <style
+            key={style.name}
             data-href={`${__PATH_PREFIX__}/${style.name}`}
             dangerouslySetInnerHTML={{
-              __html: fs.readFileSync(
-                join(process.cwd(), `public`, style.name),
-                `utf-8`
-              ),
+              __html: require(`../public/${style.name}`),
             }}
           />
         )

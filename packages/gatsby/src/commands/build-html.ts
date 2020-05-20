@@ -1,12 +1,9 @@
-import Bluebird from "bluebird"
 import fs from "fs-extra"
 import * as path from "path"
 import reporter from "gatsby-cli/lib/reporter"
 import { createErrorFromString } from "gatsby-cli/lib/reporter/errors"
 import telemetry from "gatsby-telemetry"
-import { chunk } from "lodash"
 import webpack from "webpack"
-import { createInternalJob, enqueueJob } from "../utils/jobs-manager"
 import {
   name as htmlRenderPackageName,
   version as htmlRenderPackageVersion,
@@ -16,15 +13,16 @@ import webpackConfig from "../utils/webpack.config"
 import { structureWebpackErrors } from "../utils/webpack-error-utils"
 import { actions } from "../redux/actions/public"
 
-import { IProgram, Stage } from "./types"
+import { Stage, IProgram } from "./types"
+
+type HTMLBuildStage = Stage.BuildHTML | Stage.DevelopHTML
 
 type IActivity = any // TODO
-type IWorkerPool = any // TODO
 
 const { createJobV2 } = actions
 
 const runWebpack = (compilerConfig): Bluebird<webpack.Stats> =>
-  new Bluebird((resolve, reject) => {
+  new Promise((resolve, reject) => {
     webpack(compilerConfig).run((err, stats) => {
       if (err) {
         reject(err)
@@ -72,7 +70,6 @@ const deleteRenderer = async (rendererPath: string): Promise<void> => {
 }
 
 const renderHTMLQueue = async (
-  workerPool: IWorkerPool,
   activity: IActivity,
   htmlComponentRendererPath: string,
   pages: string[],
@@ -84,82 +81,55 @@ const renderHTMLQueue = async (
     [`NODE_ENV`, process.env.NODE_ENV],
     [`gatsby_executing_command`, process.env.gatsby_executing_command],
     [`gatsby_log_level`, process.env.gatsby_log_level],
+    [`gatsby_canary_version`, `distributed-builds`],
   ]
 
-  const pagePromises = pages.map(
-    page =>
-      createJobV2(
-        {
-          name: `RENDER_HTML`,
-          inputPaths: [htmlComponentRendererPath],
-          outputDir: path.join(process.cwd(), `public`),
-          args: {
-            page,
-            envVars,
-          },
-        },
-        {
-          name: htmlRenderPackageName,
-          version: htmlRenderPackageVersion,
-          resolve: path.dirname(
-            require.resolve(`../internal-plugins/html-render`)
+  const pagePromises = pages.map(page => {
+    const pageDataPath = page === `/` ? `index` : page
+
+    return createJobV2(
+      {
+        name: `RENDER_HTML`,
+        // TODO ADD ALL PAGE-DATA JSON files so support lifecycle
+        inputPaths: [
+          htmlComponentRendererPath,
+          path.resolve(
+            path.join(`public/page-data/`, pageDataPath, `page-data.json`)
           ),
-        }
-      )(store.dispatch, store.getState).then(res => {
-        activity.tick()
+          path.resolve(`public/page-data/app-data.json`),
+        ],
+        outputDir: path.join(process.cwd(), `public`),
+        args: {
+          page,
+          pageDataPath: path.posix.join(
+            `page-data/`,
+            pageDataPath,
+            `/page-data.json`
+          ),
+          envVars,
+        },
+      },
+      {
+        name: htmlRenderPackageName,
+        version: htmlRenderPackageVersion,
+        resolve: path.dirname(
+          require.resolve(`../internal-plugins/html-render`)
+        ),
+      }
+    )(store.dispatch, store.getState).then(res => {
+      activity.tick()
 
-        return res
-      })
-    // store.dispatch()
-    // const job = createInternalJob(
-    //   {
-    //     name: `RENDER_HTML`,
-    //     inputPaths: [htmlComponentRendererPath],
-    //     outputDir: path.join(process.cwd(), `public`),
-    //     args: {
-    //       page,
-    //       envVars,
-    //     },
-    //   },
-    //   {
-    //     name: htmlRenderPackageName,
-    //     version: htmlRenderPackageVersion,
-    //     resolve: path.dirname(
-    //       require.resolve(`../internal-plugins/html-render`)
-    //     ),
-    //   }
-    // )
-
-    // return enqueueJob(job).then(res => {
-    //   activity.tick()
-
-    //   return res
-    // })
-  )
+      return res
+    })
+  })
 
   await Promise.all(pagePromises)
-
-  // const start = process.hrtime()
-  // const segments = chunk(pages, 50)
-
-  // await Bluebird.map(segments, async pageSegment => {
-  //   await workerPool.renderHTML({
-  //     envVars,
-  //     htmlComponentRendererPath,
-  //     paths: pageSegment,
-  //   })
-
-  //   if (activity && activity.tick) {
-  //     activity.tick(pageSegment.length)
-  //   }
-  // })
 }
 
 const doBuildPages = async (
   rendererPath: string,
   pagePaths: string[],
   activity: IActivity,
-  workerPool: IWorkerPool,
   store: any
 ): Promise<void> => {
   telemetry.addSiteMeasurement(`BUILD_END`, {
@@ -167,7 +137,7 @@ const doBuildPages = async (
   })
 
   try {
-    await renderHTMLQueue(workerPool, activity, rendererPath, pagePaths, store)
+    await renderHTMLQueue(activity, rendererPath, pagePaths, store)
   } catch (error) {
     const prettyError = await createErrorFromString(
       error.stack,
@@ -183,17 +153,15 @@ export const buildHTML = async ({
   stage,
   pagePaths,
   activity,
-  workerPool,
   store,
 }: {
   program: IProgram
-  stage: Stage
+  stage: HTMLBuildStage
   pagePaths: string[]
   activity: IActivity
-  workerPool: IWorkerPool
   store: any
 }): Promise<void> => {
   const rendererPath = await buildRenderer(program, stage, activity.span)
-  await doBuildPages(rendererPath, pagePaths, activity, workerPool, store)
+  await doBuildPages(rendererPath, pagePaths, activity, store)
   await deleteRenderer(rendererPath)
 }

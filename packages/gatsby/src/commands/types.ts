@@ -22,12 +22,6 @@ export interface IProgram {
   ssl?: ICert
 }
 
-// @deprecated
-export enum BuildHTMLStage {
-  DevelopHTML = `develop-html`,
-  BuildHTML = `build-html`,
-}
-
 export enum Stage {
   Develop = `develop`,
   DevelopHTML = `develop-html`,

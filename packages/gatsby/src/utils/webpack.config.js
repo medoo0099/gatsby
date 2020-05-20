@@ -604,59 +604,59 @@ module.exports = async (
     }
   }
 
-  if (stage === `build-html` || stage === `develop-html`) {
-    // Packages we want to externalize to save some build time
-    // https://github.com/gatsbyjs/gatsby/pull/14208#pullrequestreview-240178728
-    const externalList = [
-      `@reach/router/lib/history`,
-      `@reach/router`,
-      `common-tags`,
-      /^core-js\//,
-      `crypto`,
-      `debug`,
-      `fs`,
-      `https`,
-      `http`,
-      `lodash`,
-      `path`,
-      `semver`,
-      /^lodash\//,
-      `zlib`,
-    ]
-
-    // Packages we want to externalize because meant to be user-provided
-    const userExternalList = [`react-helmet`, `react`, /^react-dom\//]
-
-    const checkItem = (item, request) => {
-      if (typeof item === `string` && item === request) {
-        return true
-      } else if (item instanceof RegExp && item.test(request)) {
-        return true
-      }
-      return false
-    }
-
-    const isExternal = request => {
-      if (externalList.some(item => checkItem(item, request))) {
-        return `umd ${require.resolve(request)}`
-      }
-      if (userExternalList.some(item => checkItem(item, request))) {
-        return `umd ${request}`
-      }
-      return null
-    }
-
-    config.externals = [
-      function (context, request, callback) {
-        const external = isExternal(request)
-        if (external !== null) {
-          callback(null, external)
-        } else {
-          callback()
-        }
-      },
-    ]
-  }
+  // if (stage === `build-html` || stage === `develop-html`) {
+  //   // Packages we want to externalize to save some build time
+  //   // https://github.com/gatsbyjs/gatsby/pull/14208#pullrequestreview-240178728
+  //   const externalList = [
+  //     `@reach/router/lib/history`,
+  //     `@reach/router`,
+  //     `common-tags`,
+  //     /^core-js\//,
+  //     `crypto`,
+  //     `debug`,
+  //     `fs`,
+  //     `https`,
+  //     `http`,
+  //     `lodash`,
+  //     `path`,
+  //     `semver`,
+  //     /^lodash\//,
+  //     `zlib`,
+  //   ]
+  //   // Packages we want to externalize because meant to be user-provided
+  //   const userExternalList = [`react-helmet`, `react`, /^react-dom\//]
+  //   const checkItem = (item, request) => {
+  //     if (typeof item === `string` && item === request) {
+  //       return true
+  //     } else if (item instanceof RegExp && item.test(request)) {
+  //       return true
+  //     }
+  //     return false
+  //   }
+  //   const isExternal = request => {
+  //     if (externalList.some(item => checkItem(item, request))) {
+  //       return `umd ${require.resolve(request)}`
+  //     }
+  //     if (userExternalList.some(item => checkItem(item, request))) {
+  //       return `umd ${request}`
+  //     }
+  //     return null
+  //   }
+  // config.externals = [
+  //   function (context, request, callback) {
+  //     if (request === `fs`) {
+  //       return callback(null, `umd ${process.cwd()}/fsMock.js`)
+  //     }
+  //     callback()
+  // const external = isExternal(request)
+  // if (external !== null) {
+  //   callback(null, external)
+  // } else {
+  //   callback()
+  // }
+  //   },
+  // ]
+  // }
 
   store.dispatch(actions.replaceWebpackConfig(config))
   const getConfig = () => store.getState().webpack
