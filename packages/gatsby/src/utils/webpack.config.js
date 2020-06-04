@@ -161,8 +161,8 @@ module.exports = async (
     switch (stage) {
       case `develop`:
         return {
+          polyfill: directoryPath(`.cache/polyfill-entry`),
           commons: [
-            require.resolve(`event-source-polyfill`),
             `${require.resolve(
               `webpack-hot-middleware/client`
             )}?path=${getHmrPath()}`,
@@ -179,6 +179,7 @@ module.exports = async (
         }
       case `build-javascript`:
         return {
+          polyfill: directoryPath(`.cache/polyfill-entry`),
           app: directoryPath(`.cache/production-app`),
         }
       default:
@@ -397,7 +398,8 @@ module.exports = async (
         "@babel/runtime": path.dirname(
           require.resolve(`@babel/runtime/package.json`)
         ),
-        "core-js": path.dirname(require.resolve(`core-js/package.json`)),
+        // TODO move to a proper resolver plugin
+        // "core-js": path.dirname(require.resolve(`core-js/package.json`)),
         // TODO: Remove entire block when we make fast-refresh the default
         ...(process.env.GATSBY_HOT_LOADER !== `fast-refresh`
           ? {
